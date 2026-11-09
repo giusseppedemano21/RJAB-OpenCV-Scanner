@@ -1,0 +1,62 @@
+
+name: Build OpenCV.js 4.10.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-opencv.yml"
+      - "config/opencv_js.config.py"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git python3
+
+      - name: Install Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          cd "$HOME/emsdk"
+          ./emsdk install 3.1.64
+          ./emsdk activate 3.1.64
+
+      - name: Build OpenCV.js
+        shell: bash
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+
+          git clone --branch 4.10.0 --depth 1 \
+            https://github.com/opencv/opencv.git opencv
+
+          emcmake python3 opencv/platforms/js/build_js.py build \
+            --build_wasm \
+            --clean_build_dir \
+            --config="$GITHUB_WORKSPACE/config/opencv_js.config.py" \
+            --cmake_option="-DCMAKE_CXX_STANDARD=17"
+
+      - name: Verify output
+        run: |
+          test -s build/bin/opencv.js
+          ls -lh build/bin/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rjab-opencv-4.10.0
+          path: build/bin/
+          if-no-files-found: error
+          retention-days: 30
